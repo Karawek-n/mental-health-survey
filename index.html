@@ -35,6 +35,7 @@
         // **ตั้งค่า URL ของ Google Apps Script ที่นี่ (ดูวิธีตั้งค่าด้านล่าง)**
         const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzr8VpsZY4vbG84rWwYfTMFa5-_PYXwUV5kLuyR-tyg2o2udUMNs8iSc2iatG3wx1Gh/exec';
 
+        // ย้าย Components ย่อยออกมาไว้ข้างนอก SurveyApp เพื่อป้องกันปัญหา re-rendering ซ้ำซ้อน
         const QuestionBox = ({ title, children, required = true }) => (
             <div className="mb-8 p-6 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
                 <h3 className="text-lg font-medium text-gray-800 mb-4">{title} {required && <span className="text-red-500">*</span>}</h3>
