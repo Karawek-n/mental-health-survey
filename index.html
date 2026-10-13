@@ -3,507 +3,457 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>แบบสำรวจแนวทางการดูแลทางจิตใจนักศึกษาแพทย์</title>
+    <title>ผลการสำรวจแนวทางการดูแลทางจิตใจนักศึกษาแพทย์ โดยอาจารย์แพทย์</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts (Inter & Sarabun for Thai) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Sarabun', sans-serif; background-color: #f8fafc; color: #334155; }
-        h1, h2, h3 { font-family: 'Inter', 'Sarabun', sans-serif; }
-        .fade-in { animation: fadeIn 0.4s ease-in; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Custom Checkbox/Radio */
-        .custom-control input:checked + div {
-            border-color: #0d9488;
-            background-color: #f0fdfa;
+        body {
+            font-family: 'Sarabun', 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
         }
-        .custom-control input:checked + div .indicator {
-            background-color: #0d9488;
-            border-color: #0d9488;
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
-<body>
+<body class="bg-slate-50 min-h-screen">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect } = React;
 
-        // **ตั้งค่า URL ของ Google Apps Script ที่นี่ (ดูวิธีตั้งค่าด้านล่าง)**
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzr8VpsZY4vbG84rWwYfTMFa5-_PYXwUV5kLuyR-tyg2o2udUMNs8iSc2iatG3wx1Gh/exec';
-
-        // ย้าย Components ย่อยออกมาไว้ข้างนอก SurveyApp เพื่อป้องกันปัญหา re-rendering ซ้ำซ้อน
-        const QuestionBox = ({ title, children, required = true }) => (
-            <div className="mb-8 p-6 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="text-lg font-medium text-gray-800 mb-4">{title} {required && <span className="text-red-500">*</span>}</h3>
-                {children}
+        // Interactive Animated Progress Bar Component
+        const ProgressBar = ({ label, percentage, count, total, color = "bg-teal-500", subtext }) => (
+            <div class="mb-4 group">
+                <div class="flex justify-between items-baseline mb-1">
+                    <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">{label}</span>
+                    <span class="text-xs font-bold text-slate-900">
+                        {percentage}% {count !== undefined && <span class="font-normal text-slate-500">({count}{total ? `/${total}` : ''} คน)</span>}
+                    </span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
+                    <div 
+                        class={`h-3 rounded-full transition-all duration-1000 ease-out ${color}`} 
+                        style={{ width: `${percentage}%` }}
+                    ></div>
+                </div>
+                {subtext && <p class="text-xs text-slate-500 mt-1 leading-relaxed">{subtext}</p>}
             </div>
         );
 
-        const OptionButton = ({ type, name, value, label, checked, onChange, disabled }) => (
-            <label className={`custom-control block cursor-pointer mb-2 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                <input 
-                    type={type} 
-                    name={name} 
-                    value={value}
-                    checked={checked} 
-                    onChange={() => onChange(name, value)} 
-                    className="hidden"
-                    disabled={disabled}
-                />
-                <div className="flex items-center p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                    <div className={`indicator w-5 h-5 rounded-${type === 'radio' ? 'full' : 'md'} border-2 border-gray-300 mr-3 flex items-center justify-center transition-colors`}>
-                        {checked && type === 'checkbox' && (
-                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-                        )}
-                        {checked && type === 'radio' && (
-                            <div className="w-2 h-2 bg-white rounded-full"></div>
-                        )}
-                    </div>
-                    <span className="text-gray-700 font-medium">{label}</span>
-                </div>
-            </label>
-        );
+        const SurveyResultsApp = () => {
+            const [filterRole, setFilterRole] = useState('all'); // 'all', 'student', 'instructor'
 
-        const RatingScale = ({ name, currentValue, onChange }) => (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mt-4">
-                <span className="text-sm text-gray-500 w-full sm:w-auto text-center sm:text-left">1 = ไม่เห็นด้วย/ไม่มั่นใจเลย</span>
-                <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(num => (
-                        <button
-                            key={num}
-                            type="button"
-                            onClick={() => onChange(name, num)}
-                            className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all ${
-                                currentValue === num 
-                                ? 'bg-teal-600 text-white shadow-md scale-110' 
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
-                        >
-                            {num}
-                        </button>
-                    ))}
-                </div>
-                <span className="text-sm text-gray-500 w-full sm:w-auto text-center sm:text-right">5 = เห็นด้วย/มั่นใจมาก</span>
-            </div>
-        );
-
-        const TextInput = ({ name, value, onChange, placeholder, isTextarea = false }) => {
-            const baseClass = "w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all resize-none text-gray-700 bg-gray-50 focus:bg-white";
-            return isTextarea ? (
-                <textarea name={name} value={value} onChange={onChange} placeholder={placeholder} rows="3" className={baseClass} />
-            ) : (
-                <input type="text" name={name} value={value} onChange={onChange} placeholder={placeholder} className={baseClass} />
-            );
-        };
-
-        const SurveyApp = () => {
-            const [role, setRole] = useState(null); // 'student' | 'instructor'
-            const [formData, setFormData] = useState({
-                // Student defaults
-                student_year: '',
-                student_q1: '',
-                student_q2: '',
-                student_q3: '',
-                student_q3_1: [],
-                student_q3_1_other: '',
-                student_q3_2: '',
-                student_q4: [],
-                student_q4_other: '',
-                student_q5: [],
-                student_q5_other: '',
-                student_q6: '',
-                // Instructor defaults
-                instructor_years: '',
-                instructor_received_care: '',
-                instructor_received_care_how: '',
-                instructor_q1: '',
-                instructor_q2: '',
-                instructor_q3: [],
-                instructor_q3_other: '',
-                instructor_q4: ''
-            });
-            const [status, setStatus] = useState('idle'); // idle, submitting, success, error
-            const [errorMsg, setErrorMsg] = useState('');
-
-            const handleTextChange = (e) => {
-                const { name, value } = e.target;
-                setFormData(prev => ({ ...prev, [name]: value }));
-            };
-
-            const handleRadioChange = (name, value) => {
-                setFormData(prev => ({ ...prev, [name]: value }));
-            };
-
-            const handleCheckboxChange = (name, value, maxSelections = null) => {
-                setFormData(prev => {
-                    const currentSelections = prev[name] || [];
-                    if (currentSelections.includes(value)) {
-                        return { ...prev, [name]: currentSelections.filter(item => item !== value) };
-                    } else {
-                        if (maxSelections && currentSelections.length >= maxSelections) {
-                            return prev; // Reached max
-                        }
-                        return { ...prev, [name]: [...currentSelections, value] };
-                    }
-                });
-            };
-
-            const resetForm = () => {
-                setRole(null);
-                setStatus('idle');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                setStatus('submitting');
-                
-                // Prepare flat payload for Google Sheets
-                const payload = {
-                    timestamp: new Date().toISOString(),
-                    role: role,
-                    // Student
-                    student_year: formData.student_year,
-                    student_q1: formData.student_q1,
-                    student_q2: formData.student_q2,
-                    student_q3: formData.student_q3,
-                    student_q3_1: formData.student_q3_1.join(', ') + (formData.student_q3_1.includes('อื่นๆ') ? ` (${formData.student_q3_1_other})` : ''),
-                    student_q3_2: formData.student_q3_2,
-                    student_q4: formData.student_q4.join(', ') + (formData.student_q4.includes('อื่นๆ') ? ` (${formData.student_q4_other})` : ''),
-                    student_q5: formData.student_q5.join(', ') + (formData.student_q5.includes('อื่นๆ') ? ` (${formData.student_q5_other})` : ''),
-                    student_q6: formData.student_q6,
-                    // Instructor
-                    instructor_years: formData.instructor_years,
-                    instructor_received_care: formData.instructor_received_care + (formData.instructor_received_care === 'เคย' ? ` (${formData.instructor_received_care_how})` : ''),
-                    instructor_q1: formData.instructor_q1,
-                    instructor_q2: formData.instructor_q2,
-                    instructor_q3: formData.instructor_q3.join(', ') + (formData.instructor_q3.includes('อื่นๆ') ? ` (${formData.instructor_q3_other})` : ''),
-                    instructor_q4: formData.instructor_q4,
-                };
-
-                // Remove unselected role data for cleaner sheet
-                Object.keys(payload).forEach(key => {
-                    if (role === 'student' && key.startsWith('instructor_')) payload[key] = '';
-                    if (role === 'instructor' && key.startsWith('student_')) payload[key] = '';
-                });
-
-                if(GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
-                    // Simulation mode if URL not set
-                    setTimeout(() => {
-                        console.log("Simulated Submission Payload:", payload);
-                        setStatus('success');
-                    }, 1500);
-                    return;
+            useEffect(() => {
+                if (window.lucide) {
+                    window.lucide.createIcons();
                 }
-
-                try {
-                    const response = await fetch(GOOGLE_SCRIPT_URL, {
-                        method: 'POST',
-                        mode: 'no-cors', // Required for simple Google Apps Script web apps
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    // Since it's no-cors, we can't read response.ok easily, but if it doesn't throw, it likely succeeded.
-                    setStatus('success');
-                } catch (err) {
-                    console.error("Submission error:", err);
-                    setStatus('error');
-                    setErrorMsg('เกิดข้อผิดพลาดในการส่งข้อมูล โปรดลองใหม่อีกครั้ง');
-                }
-            };
-
-            const renderStudentForm = () => (
-                <div className="fade-in space-y-2">
-                    <QuestionBox title="ชั้นปีที่ท่านศึกษาในขณะนี้">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {[1, 2, 3, 4, 5, 6].map(year => (
-                                <OptionButton key={year} type="radio" name="student_year" value={year.toString()} label={`ปี ${year}`} checked={formData.student_year === year.toString()} onChange={handleRadioChange} />
-                            ))}
-                        </div>
-                    </QuestionBox>
-
-                    <h2 className="text-xl font-semibold text-teal-800 mt-8 mb-4 flex items-center gap-2">
-                        <span className="bg-teal-100 p-2 rounded-lg"><svg className="w-5 h-5 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span>
-                        ตอนที่ 1: ประสบการณ์การได้รับการดูแลทางจิตใจ
-                    </h2>
-
-                    <QuestionBox title="1. ท่านเผชิญภาวะวิกฤตทางจิตใจ / ความเครียดสูง / Burnout ระหว่างเรียนแพทย์หรือไม่">
-                        <OptionButton type="radio" name="student_q1" value="ไม่เคย" label="ไม่เคย" checked={formData.student_q1 === 'ไม่เคย'} onChange={handleRadioChange} />
-                        <OptionButton type="radio" name="student_q1" value="เคย" label="เคย" checked={formData.student_q1 === 'เคย'} onChange={handleRadioChange} />
-                    </QuestionBox>
-
-                    <QuestionBox title="2. หากเกิดความไม่สบายใจ ท่านสบายใจในการขอคำปรึกษาด้านสุขภาพจิตกับอาจารย์แพทย์มากน้อยเพียงใด">
-                        <RatingScale name="student_q2" currentValue={formData.student_q2} onChange={handleRadioChange} />
-                    </QuestionBox>
-
-                    <QuestionBox title="3. ในช่วงที่ศึกษาอยู่คณะแพทย์ มช. ท่านเคยปรึกษาอาจารย์แพทย์เมื่อเผชิญภาวะวิกฤตทางจิตใจ / ความเครียดสูง / Burnout หรือไม่?">
-                        <OptionButton type="radio" name="student_q3" value="ไม่เคย" label="ไม่เคย" checked={formData.student_q3 === 'ไม่เคย'} onChange={handleRadioChange} />
-                        <OptionButton type="radio" name="student_q3" value="เคย" label="เคย" checked={formData.student_q3 === 'เคย'} onChange={handleRadioChange} />
-                    </QuestionBox>
-
-                    {formData.student_q3 === 'เคย' && (
-                        <div className="ml-0 sm:ml-6 pl-0 sm:pl-6 sm:border-l-4 border-teal-200 fade-in">
-                            <QuestionBox title="3.1 เมื่อ นศพ. ปรึกษาอาจารย์เรื่องความเครียด/สุขภาพจิต ประสบการณ์ส่วนใหญ่ที่พบคืออะไร? (เลือกตอบได้มากกว่า 1 ข้อ)">
-                                {[
-                                    'อาจารย์รับฟังด้วยความเข้าใจ ไม่ตัดสิน',
-                                    'อาจารย์ช่วยปรับเปลี่ยนภาระงาน/ประสานงานช่วยเหลือ',
-                                    'อาจารย์ตั้งใจช่วย แต่คำแนะนำอาจยังไม่ตรงจุด (เช่น บอกให้ "อดทน", "สมัยหมอยากกว่านี้")',
-                                    'อาจารย์แสดงท่าทีไม่เข้าใจ หรือมองว่าเป็นเรื่องการขาดความรับผิดชอบ',
-                                    'อื่นๆ'
-                                ].map(opt => (
-                                    <div key={opt}>
-                                        <OptionButton type="checkbox" name="student_q3_1" value={opt} label={opt} checked={formData.student_q3_1.includes(opt)} onChange={handleCheckboxChange} />
-                                        {opt === 'อื่นๆ' && formData.student_q3_1.includes('อื่นๆ') && (
-                                            <div className="mt-2 ml-4">
-                                                <TextInput name="student_q3_1_other" value={formData.student_q3_1_other} onChange={handleTextChange} placeholder="โปรดระบุ..." />
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </QuestionBox>
-
-                            <QuestionBox title="3.2 สิ่งที่อาจารย์ทำแล้วจะช่วยให้รู้สึกดีขึ้นคืออะไร (เช่น ยกตัวอย่างคำพูด ท่าที หรือน้ำเสียง)">
-                                <TextInput name="student_q3_2" value={formData.student_q3_2} onChange={handleTextChange} isTextarea={true} placeholder="อธิบายเพิ่มเติม..." />
-                            </QuestionBox>
-                        </div>
-                    )}
-
-                    <h2 className="text-xl font-semibold text-teal-800 mt-10 mb-4 flex items-center gap-2">
-                        <span className="bg-teal-100 p-2 rounded-lg"><svg className="w-5 h-5 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></span>
-                        ตอนที่ 2: อุปสรรคในการขอรับคำปรึกษาและสิ่งที่ต้องการจากอาจารย์
-                    </h2>
-
-                    <QuestionBox title="4. อะไรคืออุปสรรคสำคัญที่สุดที่อาจทำให้ท่าน ไม่กล้า เปิดใจคุยเรื่องสุขภาพจิตกับอาจารย์? (เลือกได้หลายข้อ)">
-                        {[
-                            'กลัวกระทบต่อผลการเรียน/เกรด/การประเมิน',
-                            'กลัวอาจารย์มองว่าอ่อนแอ หรือไม่เหมาะสมจะเป็นแพทย์',
-                            'อาจารย์ดูยุ่งมาก ไม่มีเวลา',
-                            'ไม่มั่นใจเรื่องการรักษาความลับ',
-                            'กลัวคำตอบสไตล์ "สอนสั่ง" หรือ "เปรียบเทียบกับยุคอาจารย์"',
-                            'อื่นๆ'
-                        ].map(opt => (
-                            <div key={opt}>
-                                <OptionButton type="checkbox" name="student_q4" value={opt} label={opt} checked={formData.student_q4.includes(opt)} onChange={handleCheckboxChange} />
-                                {opt === 'อื่นๆ' && formData.student_q4.includes('อื่นๆ') && (
-                                    <div className="mt-2 ml-4">
-                                        <TextInput name="student_q4_other" value={formData.student_q4_other} onChange={handleTextChange} placeholder="โปรดระบุ..." />
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </QuestionBox>
-
-                    <QuestionBox title="5. สิ่งที่ นศพ. อยากให้อาจารย์แพทย์ทำมากที่สุด เมื่อสัมผัสได้ว่า นศพ.กำลังรู้สึกแย่ (เลือกได้หลายข้อ)">
-                        {[
-                            'แค่รับฟังอย่างตั้งใจ โดยยังไม่ต้องรีบตัดสินหรือให้คำแนะนำ',
-                            'ถามไถ่ด้วยความห่วงใยสั้นๆ หลังเลิกวอร์ด/เลิกเรียน',
-                            'ช่วยอำนวยความสะดวกเรื่องการพาไปพบจิตแพทย์/ลากิจป่วย',
-                            'ปรับวัฒนธรรมการทำงาน/การ Round งานให้มีความ Psychological Safety มากขึ้น',
-                            'อื่นๆ'
-                        ].map(opt => (
-                            <div key={opt}>
-                                <OptionButton type="checkbox" name="student_q5" value={opt} label={opt} checked={formData.student_q5.includes(opt)} onChange={handleCheckboxChange} />
-                                {opt === 'อื่นๆ' && formData.student_q5.includes('อื่นๆ') && (
-                                    <div className="mt-2 ml-4">
-                                        <TextInput name="student_q5_other" value={formData.student_q5_other} onChange={handleTextChange} placeholder="โปรดระบุ..." />
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </QuestionBox>
-
-                    <QuestionBox title="6. สิ่งที่อยากได้รับจากอาจารย์มากที่สุด ในการดูแลสุขภาพจิตนักศึกษา (ระบุสั้นๆ)">
-                        <TextInput name="student_q6" value={formData.student_q6} onChange={handleTextChange} isTextarea={true} placeholder="พิมพ์ข้อความที่นี่..." />
-                    </QuestionBox>
-                </div>
-            );
-
-            const renderInstructorForm = () => (
-                <div className="fade-in space-y-2">
-                    <QuestionBox title="ท่านเป็นอาจารย์แพทย์มาแล้วกี่ปี">
-                        <TextInput name="instructor_years" value={formData.instructor_years} onChange={handleTextChange} placeholder="ระบุจำนวนปี เช่น 5, 10" />
-                    </QuestionBox>
-
-                    <QuestionBox title="ในขณะที่ท่านเป็นนักศึกษาแพทย์ท่านเคยได้รับการใส่ใจด้านสุขภาพจิตของท่าน จากอาจารย์แพทย์หรือไม่">
-                        <OptionButton type="radio" name="instructor_received_care" value="ไม่เคย" label="ไม่เคย" checked={formData.instructor_received_care === 'ไม่เคย'} onChange={handleRadioChange} />
-                        <OptionButton type="radio" name="instructor_received_care" value="เคย" label="เคย" checked={formData.instructor_received_care === 'เคย'} onChange={handleRadioChange} />
-                        {formData.instructor_received_care === 'เคย' && (
-                            <div className="mt-3 ml-4 pl-4 border-l-2 border-teal-200">
-                                <label className="block text-sm text-gray-600 mb-1">อย่างไร (โปรดระบุ)</label>
-                                <TextInput name="instructor_received_care_how" value={formData.instructor_received_care_how} onChange={handleTextChange} placeholder="เช่น อาจารย์เรียกไปคุย, ให้คำปรึกษา..." />
-                            </div>
-                        )}
-                    </QuestionBox>
-
-                    <h2 className="text-xl font-semibold text-teal-800 mt-10 mb-4 flex items-center gap-2">
-                        <span className="bg-teal-100 p-2 rounded-lg"><svg className="w-5 h-5 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg></span>
-                        ตอนที่ 1: ประสบการณ์และความมั่นใจ
-                    </h2>
-
-                    <QuestionBox title="1. ท่านเคยเจอ นศพ. ที่มีปัญหาสุขภาพจิตหรือความเครียดรุนแรงหรือไม่?">
-                        {[
-                            'ไม่เคยพบ',
-                            'สงสัยว่ามี แต่ไม่แน่ใจและไม่ได้เข้าไปทัก',
-                            'เคยพบ และได้เข้าไปคุย/ช่วยเหลือเบื้องต้น',
-                            'เคยพบ และส่งต่อผู้เชี่ยวชาญ/จิตแพทย์'
-                        ].map(opt => (
-                            <OptionButton key={opt} type="radio" name="instructor_q1" value={opt} label={opt} checked={formData.instructor_q1 === opt} onChange={handleRadioChange} />
-                        ))}
-                    </QuestionBox>
-
-                    <QuestionBox title="2. ท่านมีความมั่นใจแค่ไหนในการรับมือ/พูดคุยกับ นศพ. ที่มีปัญหาสุขภาพจิต?">
-                        <RatingScale name="instructor_q2" currentValue={formData.instructor_q2} onChange={handleRadioChange} />
-                    </QuestionBox>
-
-                    <h2 className="text-xl font-semibold text-teal-800 mt-10 mb-4 flex items-center gap-2">
-                        <span className="bg-teal-100 p-2 rounded-lg"><svg className="w-5 h-5 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span>
-                        ตอนที่ 2: อุปสรรคและสิ่งที่อยากรู้
-                    </h2>
-
-                    <QuestionBox title="3. ท่านคิดว่า อุปสรรคสำคัญที่สุด ของท่านในการดูแลสุขภาพจิตของ นศพ. คืออะไร? (เลือกได้สูงสุด 2 ข้อ)">
-                        <p className="text-sm text-gray-500 mb-3 ml-1">เลือกแล้ว: {formData.instructor_q3.length}/2</p>
-                        {[
-                            'ภาระงานอาจารย์เยอะมาก ไม่มีเวลาเพียงพอ',
-                            'ไม่รู้จะเริ่มทักอย่างไร หรือกลัวพูดอะไรผิดแล้วทำให้อาการ นศพ. แย่ลง',
-                            'กังวลเรื่องการรักษามาตรฐานการเรียนการสอน (เกรงว่าการยืดหยุ่นจะทำให้เสียวินัย)',
-                            'ไม่รู้วิธีการส่งต่อ หรือระบบช่วยเหลือของคณะฯ ไม่ชัดเจน',
-                            'นศพ. ปิดบัง ไม่ยอมเปิดเผยความรู้สึก',
-                            'อื่นๆ'
-                        ].map(opt => {
-                            const isChecked = formData.instructor_q3.includes(opt);
-                            const maxReached = formData.instructor_q3.length >= 2 && !isChecked;
-                            
-                            return (
-                                <div key={opt}>
-                                    <OptionButton 
-                                        type="checkbox" 
-                                        name="instructor_q3" 
-                                        value={opt} 
-                                        label={opt} 
-                                        checked={isChecked} 
-                                        onChange={(n, v) => handleCheckboxChange(n, v, 2)} 
-                                        disabled={maxReached}
-                                    />
-                                    {opt === 'อื่นๆ' && isChecked && (
-                                        <div className="mt-2 ml-4">
-                                            <TextInput name="instructor_q3_other" value={formData.instructor_q3_other} onChange={handleTextChange} placeholder="โปรดระบุ..." />
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </QuestionBox>
-
-                    <QuestionBox title="4. ข้อมูลที่ท่านอยากทราบมากที่สุด เพื่อให้ดูแลสุขภาพจิตนักศึกษาได้ง่ายขึ้น">
-                        <TextInput name="instructor_q4" value={formData.instructor_q4} onChange={handleTextChange} isTextarea={true} placeholder="ระบุสิ่งที่ท่านต้องการเรียนรู้เพิ่มเติม..." />
-                    </QuestionBox>
-                </div>
-            );
+            }, [filterRole]);
 
             return (
-                <div className="min-h-screen py-10 px-4 sm:px-6">
-                    <div className="max-w-3xl mx-auto">
+                <div class="max-w-6xl mx-auto px-4 py-8 sm:py-12 animate-fade-in">
+                    
+                    {/* Header Banner */}
+                    <div class="bg-gradient-to-br from-teal-900 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl mb-8 relative overflow-hidden">
+                        <div class="absolute -right-10 -top-10 w-48 h-48 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div class="absolute -left-10 -bottom-10 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
                         
-                        {/* Header */}
-                        <div className="text-center mb-10">
-                            <h1 className="text-3xl sm:text-4xl font-bold text-teal-900 mb-3 tracking-tight">แบบสำรวจแนวทางการดูแลทางจิตใจนักศึกษาแพทย์<br/><span className="text-xl sm:text-2xl text-teal-700">โดยอาจารย์แพทย์ (ไม่ใช่จิตแพทย์)</span></h1>
-                            <p className="text-gray-500">สำหรับนักศึกษาแพทย์และอาจารย์แพทย์</p>
+                        <div class="inline-flex items-center gap-2 bg-teal-500/20 text-teal-200 text-xs sm:text-sm px-4 py-1.5 rounded-full mb-4 backdrop-blur-md border border-teal-400/30">
+                            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                            <span>ขอบคุณที่ให้ความร่วมมือในการตอบแบบสอบถาม</span>
+                        </div>
+                        
+                        <h1 class="text-2xl sm:text-4xl font-extrabold mb-3 leading-tight tracking-tight text-white">
+                            ผลการสำรวจแนวทางการดูแลทางจิตใจนักศึกษาแพทย์
+                        </h1>
+                        <p class="text-slate-300 text-sm sm:text-base max-w-3xl font-light leading-relaxed">
+                            สะท้อนมุมมองระหว่าง <span class="font-medium text-teal-300">นักศึกษาแพทย์</span> และ <span class="font-medium text-indigo-300">อาจารย์แพทย์</span> เพื่อนำไปสู่การพัฒนาแนวทางสนับสนุนและระบบดูแลสุขภาพจิตในสถาบันการศึกษา
+                        </p>
+
+                        {/* Interactive View Filter Toggle */}
+                        <div class="mt-8 flex flex-wrap gap-2 pt-4 border-t border-white/10">
+                            <span class="text-xs text-slate-400 self-center mr-2">เลือกมุมมองที่ต้องการเน้น:</span>
+                            <button 
+                                onClick={() => setFilterRole('all')}
+                                class={`px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all ${filterRole === 'all' ? 'bg-white text-slate-900 shadow-md' : 'bg-white/10 hover:bg-white/20 text-white'}`}
+                            >
+                                <i data-lucide="layout-grid" class="w-3.5 h-3.5 inline mr-1.5"></i> แสดงทั้งหมด
+                            </button>
+                            <button 
+                                onClick={() => setFilterRole('student')}
+                                class={`px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all ${filterRole === 'student' ? 'bg-teal-500 text-white shadow-md' : 'bg-white/10 hover:bg-white/20 text-teal-200'}`}
+                            >
+                                <i data-lucide="graduation-cap" class="w-3.5 h-3.5 inline mr-1.5"></i> เน้นมุมมอง นศพ.
+                            </button>
+                            <button 
+                                onClick={() => setFilterRole('instructor')}
+                                class={`px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all ${filterRole === 'instructor' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white/10 hover:bg-white/20 text-indigo-200'}`}
+                            >
+                                <i data-lucide="stethoscope" class="w-3.5 h-3.5 inline mr-1.5"></i> เน้นมุมมองอาจารย์
+                            </button>
+                        </div>
+                    </div>
+
+                    <section class="mb-12">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                                <i data-lucide="users" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl sm:text-2xl font-bold text-slate-900"># จำนวนผู้ตอบแบบสอบถาม</h2>
+                                <p class="text-xs text-slate-500">จำแนกตามสัดส่วนกลุ่มตัวอย่าง ชั้นปี และประสบการณ์</p>
+                            </div>
                         </div>
 
-                        {/* Status Views */}
-                        {status === 'success' && (
-                            <div className="bg-teal-50 border border-teal-200 rounded-2xl p-10 text-center fade-in shadow-sm">
-                                <div className="w-20 h-20 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <svg className="w-10 h-10 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                                <div>
+                                    <span class="text-xs text-indigo-600 font-bold uppercase tracking-wider">กลุ่มตัวอย่างทั้งหมด</span>
+                                    <h3 class="text-3xl font-black text-slate-900 mt-0.5">รวมผู้ตอบแบบสำรวจทั้งหมด 187 คน</h3>
                                 </div>
-                                <h2 className="text-2xl font-bold text-teal-900 mb-2">ขอบคุณสำหรับข้อมูล</h2>
-                                <p className="text-teal-700 mb-8">ข้อมูลของท่านจะนำไปสู่การพัฒนาแนวทางการดูแลที่ดียิ่งขึ้น</p>
-                                <button onClick={resetForm} className="px-6 py-3 bg-white text-teal-700 font-medium rounded-xl border border-teal-200 hover:bg-teal-50 transition-colors shadow-sm">
-                                    กลับไปหน้าแรก
-                                </button>
-                            </div>
-                        )}
-
-                        {status !== 'success' && (
-                            <form onSubmit={handleSubmit} className="space-y-8">
-                                
-                                {/* Role Selection */}
-                                {!role ? (
-                                    <div className="bg-white p-8 sm:p-10 rounded-3xl border border-gray-100 shadow-sm fade-in">
-                                        <h3 className="text-xl text-center font-medium text-gray-800 mb-8">กรุณาเลือกสถานะของท่าน</h3>
-                                        <div className="grid sm:grid-cols-2 gap-4">
-                                            <button type="button" onClick={() => setRole('student')} className="flex flex-col items-center justify-center p-8 rounded-2xl border-2 border-gray-100 hover:border-teal-500 hover:bg-teal-50 transition-all group">
-                                                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" /></svg>
-                                                </div>
-                                                <span className="text-lg font-semibold text-gray-800">นักศึกษาแพทย์</span>
-                                            </button>
-                                            
-                                            <button type="button" onClick={() => setRole('instructor')} className="flex flex-col items-center justify-center p-8 rounded-2xl border-2 border-gray-100 hover:border-teal-500 hover:bg-teal-50 transition-all group">
-                                                <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                                </div>
-                                                <span className="text-lg font-semibold text-gray-800">อาจารย์แพทย์</span>
-                                            </button>
-                                        </div>
+                                <div class="flex items-center gap-3 w-full sm:w-auto">
+                                    <div class="flex-1 sm:flex-initial bg-teal-50 border border-teal-100 rounded-2xl p-3 px-5 text-center">
+                                        <div class="text-xs text-teal-700 font-medium">นักศึกษาแพทย์</div>
+                                        <div class="text-2xl font-bold text-teal-900">104 คน</div>
                                     </div>
-                                ) : (
-                                    /* Dynamic Form based on Role */
-                                    <div className="fade-in">
-                                        <button type="button" onClick={() => setRole(null)} className="mb-6 flex items-center text-gray-500 hover:text-teal-600 transition-colors text-sm font-medium">
-                                            <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                                            ย้อนกลับเพื่อเปลี่ยนสถานะ
-                                        </button>
+                                    <div class="flex-1 sm:flex-initial bg-indigo-50 border border-indigo-100 rounded-2xl p-3 px-5 text-center">
+                                        <div class="text-xs text-indigo-700 font-medium">อาจารย์แพทย์</div>
+                                        <div class="text-2xl font-bold text-indigo-900">83 คน</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
+                                {/* นักศึกษาแพทย์ Breakdown */}
+                                {(filterRole === 'all' || filterRole === 'student') && (
+                                    <div class="transition-all">
+                                        <h4 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                            <span class="w-3 h-3 rounded-full bg-teal-500"></span>
+                                            นักศึกษาแพทย์ (104 คน)
+                                        </h4>
+                                        <ProgressBar label="ชั้นปีที่ 5" percentage={26.9} count={28} color="bg-teal-500" />
+                                        <ProgressBar label="ชั้นปีที่ 4" percentage={20.2} count={21} color="bg-teal-500" />
+                                        <ProgressBar label="ชั้นปีที่ 1" percentage={19.2} count={20} color="bg-teal-500" />
+                                        <ProgressBar label="ชั้นปีที่ 3" percentage={18.3} count={19} color="bg-teal-500" />
+                                        <ProgressBar label="ชั้นปีที่ 2" percentage={7.7} count={8} color="bg-teal-500" />
+                                        <ProgressBar label="ชั้นปีที่ 6" percentage={7.7} count={8} color="bg-teal-500" />
+                                    </div>
+                                )}
+
+                                {/* อาจารย์แพทย์ Breakdown */}
+                                {(filterRole === 'all' || filterRole === 'instructor') && (
+                                    <div class="transition-all">
+                                        <h4 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                            <span class="w-3 h-3 rounded-full bg-indigo-600"></span>
+                                            อาจารย์แพทย์ (83 คน)
+                                        </h4>
+                                        <ProgressBar label="Young (< 10 ปี)" percentage={41.0} count={34} color="bg-indigo-600" />
+                                        <ProgressBar label="Middle (10–20 ปี)" percentage={33.7} count={28} color="bg-indigo-600" />
+                                        <ProgressBar label="Senior (> 20 ปี)" percentage={24.1} count={20} color="bg-indigo-600" />
+                                        <ProgressBar label="ไม่ระบุ" percentage={1.2} count={1} color="bg-slate-400" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="mb-12">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
+                                <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl sm:text-2xl font-bold text-slate-900"># ประสบการณ์ และความกังวล</h2>
+                                <p class="text-xs text-slate-500">สะท้อนตัวเลขจริงจากฝั่งนักศึกษาแพทย์และอาจารย์แพทย์</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* ฝั่งนักศึกษาแพทย์ */}
+                            {(filterRole === 'all' || filterRole === 'student') && (
+                                <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                                            <h3 class="text-base font-bold text-slate-900">นักศึกษาแพทย์</h3>
+                                            <span class="px-2.5 py-1 bg-teal-100 text-teal-800 text-xs font-bold rounded-md">นศพ.</span>
+                                        </div>
                                         
-                                        <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-sm border border-gray-100">
-                                            {role === 'student' ? renderStudentForm() : renderInstructorForm()}
+                                        <div class="space-y-4">
+                                            <div class="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
+                                                <div class="text-xs text-amber-800 font-bold mb-1">การเข้าปรึกษาอาจารย์แพทย์</div>
+                                                <p class="text-slate-800 text-xs sm:text-sm leading-relaxed">
+                                                    มีนักศึกษาเพียง <span class="font-bold text-amber-900">15.4% (16 คน)</span> เท่านั้นที่เคยตัดสินใจเข้าปรึกษาอาจารย์แพทย์
+                                                </p>
+                                            </div>
 
-                                            {errorMsg && (
-                                                <div className="mt-6 p-4 bg-red-50 text-red-700 rounded-xl flex items-center">
-                                                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                    {errorMsg}
+                                            <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                                                <div class="text-xs text-slate-700 font-bold mb-1">คะแนนความสบายใจในการปรึกษา</div>
+                                                <p class="text-slate-700 text-xs sm:text-sm mb-2">
+                                                    คะแนนความสบายใจของนักศึกษาในการปรึกษาอาจารย์เฉลี่ยอยู่ที่เพียง
+                                                </p>
+                                                <div class="flex items-baseline gap-2">
+                                                    <span class="text-3xl font-black text-slate-900">2.51</span>
+                                                    <span class="text-xs text-slate-500">/ 5 คะแนน (ค่ากลาง 2.0)</span>
                                                 </div>
-                                            )}
-
-                                            <div className="mt-10 pt-6 border-t border-gray-100 flex justify-end">
-                                                <button 
-                                                    type="submit" 
-                                                    disabled={status === 'submitting'}
-                                                    className={`px-8 py-4 rounded-xl text-white font-medium text-lg flex items-center transition-all ${
-                                                        status === 'submitting' ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700 shadow-md hover:shadow-lg transform hover:-translate-y-0.5'
-                                                    }`}
-                                                >
-                                                    {status === 'submitting' ? (
-                                                        <><svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>กำลังบันทึกข้อมูล...</>
-                                                    ) : (
-                                                        <>ส่งแบบสอบถาม <svg className="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg></>
-                                                    )}
-                                                </button>
                                             </div>
                                         </div>
                                     </div>
-                                )}
-                            </form>
-                        )}
-                        
-                        <div className="text-center mt-12 text-sm text-gray-500 pb-10 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                            <p className="font-medium">ข้อมูลนี้จะถูกใช้เพื่อพัฒนาการดูแลนักศึกษาแพทย์ต่อไป</p>
-                            <p className="mt-1">ไม่มีการบันทึก และเผยแพร่ตัวตนของผู้ตอบแบบสอบถามนี้</p>
+                                </div>
+                            )}
+
+                            {/* ฝั่งอาจารย์แพทย์ */}
+                            {(filterRole === 'all' || filterRole === 'instructor') && (
+                                <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                                            <h3 class="text-base font-bold text-slate-900">อาจารย์แพทย์</h3>
+                                            <span class="px-2.5 py-1 bg-indigo-100 text-indigo-800 text-xs font-bold rounded-md">อาจารย์</span>
+                                        </div>
+
+                                        <div class="space-y-4">
+                                            <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                                                <div class="text-xs text-indigo-800 font-bold mb-1">ประสบการณ์ในอดีตสมัยเป็น นศพ.</div>
+                                                <p class="text-slate-800 text-xs sm:text-sm leading-relaxed">
+                                                    อาจารย์แพทย์เพียง <span class="font-bold text-indigo-950">10.8% (9 คน)</span> เท่านั้นที่เคยได้รับการใส่ใจด้านสุขภาพจิตจากอาจารย์แพทย์มาก่อน ในสมัยที่ตนเองเป็นนักศึกษาแพทย์
+                                                </p>
+                                            </div>
+
+                                            <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                                                <div class="text-xs text-slate-700 font-bold mb-1">ความมั่นใจในการรับมือ / พูดคุย</div>
+                                                <p class="text-slate-800 text-xs sm:text-sm mb-1">
+                                                    คะแนนความมั่นใจอาจารย์ในการพูดคุย/รับมือ นศพ. อยู่ที่ <span class="font-bold text-slate-900">2.95 จาก 5</span>
+                                                </p>
+                                                <p class="text-xs text-rose-600 font-medium mt-1">
+                                                    * โดยอาจารย์ 30.9% มีความมั่นใจในระดับต่ำ (1-2 คะแนน)
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    </div>
+                    </section>
+
+                    <section class="mb-12">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="p-2.5 bg-rose-100 text-rose-700 rounded-xl">
+                                <i data-lucide="shield-alert" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl sm:text-2xl font-bold text-slate-900"># อุปสรรค</h2>
+                                <p class="text-xs text-slate-500">ข้อจำกัดและความกังวลใจของทั้งสองฝั่ง</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Student Barriers */}
+                            {(filterRole === 'all' || filterRole === 'student') && (
+                                <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                    <h3 class="text-base font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100 flex items-center justify-between">
+                                        <span>Student Barriers</span>
+                                        <span class="text-xs font-semibold px-2 py-0.5 bg-teal-100 text-teal-800 rounded">นศพ.</span>
+                                    </h3>
+                                    <div class="space-y-4">
+                                        <ProgressBar label="กลัวถูกมองว่าอ่อนแอหรือไม่เหมาะสมจะเป็นแพทย์" percentage={53.8} color="bg-rose-500" />
+                                        <ProgressBar label='กลัวคำตอบสไตล์ "สอนสั่ง" หรือ "เปรียบเทียบกับยุคอาจารย์"' percentage={48.1} color="bg-rose-500" />
+                                        <ProgressBar label="อาจารย์ดูยุ่งมาก ไม่มีเวลา" percentage={47.1} color="bg-rose-500" />
+                                        <ProgressBar label="ความไม่มั่นใจเรื่องการรักษาความลับ" percentage={35.6} color="bg-rose-400" />
+                                        <ProgressBar label="ความกลัวว่าจะกระทบต่อเกรด/ผลการประเมิน" percentage={23.1} color="bg-rose-400" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Instructor Barriers */}
+                            {(filterRole === 'all' || filterRole === 'instructor') && (
+                                <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                    <h3 class="text-base font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100 flex items-center justify-between">
+                                        <span>Instructor barriers</span>
+                                        <span class="text-xs font-semibold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded">อาจารย์</span>
+                                    </h3>
+                                    <div class="space-y-4">
+                                        <ProgressBar label="1. ไม่รู้วิธีเริ่มทัก หรือกลัวพูดอะไรผิดแล้วทำให้อาการ นศพ. แย่ลง" percentage={51.8} color="bg-indigo-600" />
+                                        <ProgressBar label="2. นศพ. ปิดบัง/ไม่ยอมเปิดเผยความรู้สึก" percentage={38.6} color="bg-indigo-600" />
+                                        <ProgressBar label="3. ไม่รู้วิธีส่งต่อ หรือระบบช่วยเหลือของคณะฯ ไม่ชัดเจน" percentage={24.1} olor="bg-indigo-500" />
+                                        <ProgressBar label="4. ภาระงานอาจารย์เยอะไม่มีเวลา" percentage={20.5} color="bg-indigo-400" />
+                                        <ProgressBar label="5. ความกังวลเรื่องเกณฑ์มาตรฐานการเรียนการสอน/วินัย" percentage={20.5} color="bg-indigo-400" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    <section class="mb-12">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="p-2.5 bg-teal-100 text-teal-700 rounded-xl">
+                                <i data-lucide="sparkles" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl sm:text-2xl font-bold text-slate-900"># สิ่งที่ต้องการ</h2>
+                                <p class="text-xs text-slate-500">ความคาดหวังและสิ่งที่ต้องการเพิ่มเพื่อพัฒนาการดูแล</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Student Needs */}
+                            {(filterRole === 'all' || filterRole === 'student') && (
+                                <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                    <h3 class="text-base font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100 flex items-center justify-between">
+                                        <span>Student needs</span>
+                                        <span class="text-xs font-semibold px-2 py-0.5 bg-teal-100 text-teal-800 rounded">นศพ.</span>
+                                    </h3>
+                                    <div class="space-y-4">
+                                        <ProgressBar label="Psychological Safety ในการทำงาน" percentage={66.3} color="bg-teal-500" />
+                                        <ProgressBar label="การถามไถ่สั้นๆ หลังเลิกเรียน/เลิกวอร์ด" percentage={60.6} color="bg-teal-500" />
+                                        <ProgressBar label="การรับฟังโดยไม่ตัดสิน" percentage={60.6} color="bg-teal-500" />
+                                        <ProgressBar 
+                                            label="การสนับสนุนระบบการเข้าถึงการรักษา" 
+                                            percentage={32.7} 
+                                            color="bg-teal-600" 
+                                            subtext="ช่วยอำนวยความสะดวกในการประสานงานพบจิตแพทย์ หรือการลากิจ/ลาป่วยอย่างถูกต้อง"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Instructor Needs */}
+                            {(filterRole === 'all' || filterRole === 'instructor') && (
+                                <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                                    <h3 class="text-base font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100 flex items-center justify-between">
+                                        <span>Instructor needs</span>
+                                        <span class="text-xs font-semibold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded">อาจารย์</span>
+                                    </h3>
+                                    <div class="space-y-4">
+                                        <ProgressBar label="เทคนิคการพูดคุย วิธีเข้าหา และการสังเกตประเมินเบื้องต้น" percentage={38} color="bg-indigo-600" />
+                                        <ProgressBar label="ระบบ ช่องทาง และขั้นตอนการส่งต่อที่ชัดเจนเป็นรูปธรรม" percentage={31} color="bg-indigo-600" />
+                                        <ProgressBar label="แนวปฏิบัติในการจัดการเรียนการสอน การประเมินผล และเกณฑ์มาตรฐาน" percentage={21} color="bg-indigo-500" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    <section class="mb-10">
+                        <div class="bg-gradient-to-br from-emerald-900 via-teal-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-emerald-800/40">
+                            <div class="flex items-center gap-3 mb-6 pb-4 border-b border-emerald-800/60">
+                                <div class="p-2.5 bg-emerald-500/20 text-emerald-300 rounded-xl backdrop-blur-md">
+                                    <i data-lucide="heart" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-xl sm:text-2xl font-bold text-emerald-100"># ความเป็นจริงไม่ได้น่ากลัวอย่างที่คิด</h2>
+                                    <p class="text-xs text-emerald-300/80">สถิติสภาวะจิตใจ มุมมองอาจารย์ และประสบการณ์จากผู้เคยรับคำปรึกษาจริง</p>
+                                </div>
+                            </div>
+
+                            {/* สถิติหลักเพิ่มเติม */}
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div class="bg-rose-950/40 border border-rose-800/40 rounded-2xl p-4 backdrop-blur-sm">
+                                    <div class="text-xs text-rose-300 font-bold mb-1">ภาวะวิกฤต/ความเครียดนักศึกษา</div>
+                                    <p class="text-xs text-slate-200 mb-2">นักศึกษา เคยเผชิญภาวะวิกฤตทางจิตใจ / ความเครียดสูง / Burnout ระหว่างเรียนแพทย์</p>
+                                    <div class="text-2xl sm:text-3xl font-black text-rose-400">88.5% <span class="text-xs font-normal text-slate-300">(92 จาก 104 คน)</span></div>
+                                </div>
+
+                                <div class="bg-indigo-950/40 border border-indigo-800/40 rounded-2xl p-4 backdrop-blur-sm">
+                                    <div class="text-xs text-indigo-300 font-bold mb-1">ประสบการณ์ฝั่งอาจารย์</div>
+                                    <p class="text-xs text-slate-200 mb-2"><span class="font-semibold text-white">อาจารย์ส่วนใหญ่เคยพบปัญหา:</span> อาจารย์ <span class="font-bold text-indigo-200">89.2%</span> เคยเจอ นศพ. ที่มีปัญหาสุขภาพจิตหรือความเครียดรุนแรง</p>
+                                    <div class="text-xs space-y-1 text-indigo-200/90 pt-1 border-t border-indigo-800/40">
+                                        <div>• 44.6% ช่วยเหลือเบื้องต้น</div>
+                                        <div>• 22.9% ส่งต่อจิตแพทย์</div>
+                                        <div>• 21.7% สงสัยแต่ไม่กล้าเข้าไปทัก</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ประสบการณ์จากนักศึกษา 16 คน */}
+                            <div class="mb-6">
+                                <h3 class="text-sm font-bold text-emerald-200 mb-3 flex items-center gap-2">
+                                    <i data-lucide="message-square" class="w-4 h-4 text-emerald-400"></i>
+                                    <span>ประสบการณ์จากนักศึกษาแพทย์ที่เคยรับคำปรึกษา 16 คน</span>
+                                </h3>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="bg-emerald-950/60 border border-emerald-800/60 rounded-2xl p-4 backdrop-blur-sm">
+                                        <div class="flex justify-between items-baseline mb-1">
+                                            <span class="text-sm font-semibold text-emerald-200">นักศึกษาได้รับประสบการณ์เชิงบวกจากการรับฟัง</span>
+                                            <span class="text-sm font-bold text-emerald-400">68.8% (11 คน)</span>
+                                        </div>
+                                        <p class="text-xs text-emerald-300/80 leading-relaxed">รู้สึกว่าอาจารย์รับฟังด้วยความเข้าใจ และไม่ตัดสิน</p>
+                                    </div>
+
+                                    <div class="bg-emerald-950/60 border border-emerald-800/60 rounded-2xl p-4 backdrop-blur-sm">
+                                        <div class="flex justify-between items-baseline mb-1">
+                                            <span class="text-sm font-semibold text-emerald-200">ได้รับการช่วยเหลือเชิงระบบ</span>
+                                            <span class="text-sm font-bold text-emerald-400">25.0% (4 คน)</span>
+                                        </div>
+                                        <p class="text-xs text-emerald-300/80 leading-relaxed">อาจารย์ช่วยปรับเปลี่ยนภาระงาน หรือช่วยประสานงานช่วยเหลือเบื้องต้น</p>
+                                    </div>
+
+                                    <div class="bg-emerald-950/60 border border-emerald-800/60 rounded-2xl p-4 backdrop-blur-sm">
+                                        <div class="flex justify-between items-baseline mb-1">
+                                            <span class="text-sm font-semibold text-emerald-200">เจอปัญหาคำแนะนำไม่ตรงจุด</span>
+                                            <span class="text-sm font-bold text-amber-300">18.8% (3 คน)</span>
+                                        </div>
+                                        <p class="text-xs text-emerald-300/80 leading-relaxed">อาจารย์ตั้งใจช่วย แต่คำแนะนำยังเป็นแนว "ให้อดทน" หรือ "เปรียบเทียบกับสมัยอาจารย์เรียน"</p>
+                                    </div>
+
+                                    <div class="bg-emerald-950/60 border border-emerald-800/60 rounded-2xl p-4 backdrop-blur-sm">
+                                        <div class="flex justify-between items-baseline mb-1">
+                                            <span class="text-sm font-semibold text-emerald-200">เจอประสบการณ์ทางลบ</span>
+                                            <span class="text-sm font-bold text-rose-400">6.2% (1 คน)</span>
+                                        </div>
+                                        <p class="text-xs text-emerald-300/80 leading-relaxed">แสดงท่าทีไม่เข้าใจ หรือมองว่าเป็นเรื่องการขาดความรับผิดชอบ</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* พฤติกรรมที่ทำให้นักศึกษารู้สึกดีขึ้น */}
+                            <div class="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10">
+                                <h3 class="text-sm font-bold text-emerald-200 mb-3 flex items-center gap-2">
+                                    <i data-lucide="thumbs-up" class="w-4 h-4 text-emerald-400"></i>
+                                    <span>โดยพฤติกรรมของอาจารย์ที่ทำให้นักศึกษารู้สึกดีขึ้น</span>
+                                </h3>
+                                <ul class="space-y-3 text-xs sm:text-sm text-emerald-100 font-light">
+                                    <li class="flex items-start gap-2.5">
+                                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                                        <span>น้ำเสียงสงบ ท่าทางเอาใจใส่ และ <strong>"validate ความรู้สึก"</strong> (ไม่ด้อยค่าความรู้สึกของนักศึกษา)</span>
+                                    </li>
+                                    <li class="flex items-start gap-2.5">
+                                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                                        <span>การรับฟังเฉยๆ โดยไม่รีบด่า สอนสั่ง หรือรีบสรุปหาทางแก้ให้ทันที</span>
+                                    </li>
+                                    <li class="flex items-start gap-2.5">
+                                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+                                        <span>การช่วยดึงสติ ให้ทำ Self-reflection และช่วยมองมุมมองชีวิตที่กว้างกว่าเรื่องการเรียนแพทย์</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <footer class="text-center text-xs text-slate-400 pt-6 pb-12 border-t border-slate-200">
+                        <p>© แบบสำรวจแนวทางการดูแลทางจิตใจนักศึกษาแพทย์ โดยอาจารย์แพทย์</p>
+                        <p class="mt-1">ข้อมูลนี้จะถูกใช้เพื่อพัฒนาการดูแลนักศึกษาแพทย์ต่อไป ไม่มีการบันทึก และเผยแพร่ตัวตนของผู้ตอบแบบสอบถามนี้</p>
+                    </footer>
+
                 </div>
             );
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<SurveyApp />);
+        root.render(<SurveyResultsApp />);
     </script>
 </body>
 </html>
